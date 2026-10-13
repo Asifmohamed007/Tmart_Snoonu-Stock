@@ -1,0 +1,828 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0A251B">
+<title>FreshQA Stock Radar</title>
+<link rel="icon" href="favicon.png">
+<link rel="apple-touch-icon" href="favicon.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
+<script>
+  // ============ ONLY TWO THINGS TO FILL IN (Supabase -> Project Settings -> API Keys) ============
+  // These are PUBLIC by design (the "anon" / "publishable" key). Never put the service/secret key here.
+  window.FRESHQA_CONFIG = {
+    SUPABASE_URL: "https://zraicjnfeycewtgufamd.supabase.co/rest/v1/",
+    SUPABASE_ANON_KEY: "sb_publishable_RCGWDOP1XaSP5vghVTeC8w__xIJcHIl"
+  };
+</script>
+<style>
+  :root {
+    --forest: #0A251B;
+    --deep: #0F3527;
+    --leaf: #145A40;
+    --mint: #5BE3A1;
+    --mango: #FFB547;
+    --pome: #FF5C7A;
+    --cream: #EFF8F2;
+    --mist: rgba(239, 248, 242, .66);
+    --faint: rgba(239, 248, 242, .42);
+    --glass: rgba(255, 255, 255, .055);
+    --glass-2: rgba(255, 255, 255, .09);
+    --edge: rgba(255, 255, 255, .13);
+    --r-lg: 26px;
+    --r-md: 16px;
+    --r-sm: 10px;
+    --ease: cubic-bezier(.2, .8, .2, 1);
+    --spring: cubic-bezier(.34, 1.56, .64, 1);
+  }
+  * { box-sizing: border-box; }
+  html { -webkit-text-size-adjust: 100%; }
+  body {
+    margin: 0; min-height: 100vh; color: var(--cream); background: var(--forest);
+    font-family: Outfit, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    font-size: 16px; line-height: 1.5; overflow-x: hidden;
+    padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
+  }
+  button, input { font: inherit; color: inherit; }
+  :focus-visible { outline: 3px solid var(--mango); outline-offset: 3px; border-radius: 8px; }
+
+  /* ---------- living background: juice-coloured light ---------- */
+  .aurora { position: fixed; inset: 0; z-index: -2; overflow: hidden; background:
+    radial-gradient(120% 80% at 50% -10%, #154A36 0%, var(--forest) 55%, #061811 100%); }
+  .aurora span { position: absolute; border-radius: 50%; opacity: .55; will-change: transform;
+    background: radial-gradient(closest-side, var(--c) 0%, transparent 100%);
+    animation: drift 26s ease-in-out infinite alternate; }
+  .aurora .a1 { width: 46vmax; height: 46vmax; left: -12vmax; top: -10vmax; --c: #1F8A5E; }
+  .aurora .a2 { width: 34vmax; height: 34vmax; right: -10vmax; top: 10vh; --c: #C98A1B; opacity: .28; animation-duration: 32s; animation-delay: -6s; }
+  .aurora .a3 { width: 30vmax; height: 30vmax; left: 25vw; bottom: -14vmax; --c: #B23A55; opacity: .2; animation-duration: 38s; animation-delay: -12s; }
+  .aurora .a4 { width: 22vmax; height: 22vmax; right: 18vw; bottom: 6vh; --c: #3FD18C; opacity: .22; animation-duration: 29s; animation-delay: -3s; }
+  @keyframes drift {
+    0% { transform: translate3d(0, 0, 0) scale(1); }
+    50% { transform: translate3d(6vw, 4vh, 0) scale(1.12); }
+    100% { transform: translate3d(-4vw, 8vh, 0) scale(.94); }
+  }
+  .grain { display: none;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E"); }
+
+  .wrap { width: min(1180px, 100% - 32px); margin: 0 auto; }
+
+  /* ---------- top bar ---------- */
+  .top { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 22px 0 10px; }
+  .top img { height: 62px; width: auto; display: block; }
+  .pc { display: inline-flex; align-items: center; gap: 10px; padding: 8px 14px 8px 12px; border-radius: 999px;
+    background: rgba(14,48,35,.7); border: 1px solid var(--edge);
+    font-size: 14px; color: var(--mist); white-space: nowrap; }
+  .pc i { width: 10px; height: 10px; border-radius: 50%; background: #6B7F74; position: relative; flex: none; }
+  .pc.on i { background: var(--mint); }
+  .pc.on i::after { content: ""; position: absolute; inset: -5px; border-radius: 50%; border: 2px solid var(--mint);
+    animation: ping 2.2s var(--ease) infinite; }
+  @keyframes ping { 0% { transform: scale(.5); opacity: .9; } 100% { transform: scale(1.8); opacity: 0; } }
+
+  /* ---------- hero ---------- */
+  .hero { padding: 34px 0 26px; max-width: 760px; }
+  .hero h1 { margin: 0; font-weight: 800; font-size: clamp(36px, 6.4vw, 68px); line-height: .98; letter-spacing: -.035em;
+    background: linear-gradient(100deg, #FFFFFF 0%, #DFF7E9 38%, #9BEFC5 62%, #FFD58A 100%);
+    -webkit-background-clip: text; background-clip: text; color: transparent;
+  }
+  @keyframes sheen { to { background-position: 100% 0; } }
+  .hero p { margin: 18px 0 0; color: var(--mist); font-size: 18px; max-width: 52ch; font-weight: 300; }
+
+  /* ---------- source switch ---------- */
+  .switch { position: relative; display: inline-grid; grid-auto-flow: column; grid-auto-columns: 1fr; padding: 6px;
+    border-radius: 999px; background: rgba(0,0,0,.22); border: 1px solid var(--edge); margin-bottom: 22px; }
+  .switch button { position: relative; z-index: 1; border: 0; background: none; cursor: pointer; padding: 11px 26px;
+    border-radius: 999px; font-weight: 600; font-size: 16px; color: var(--mist); transition: color .35s var(--ease); }
+  .switch button[aria-selected="true"] { color: #082016; }
+  .switch .ind { position: absolute; z-index: 0; top: 6px; bottom: 6px; left: 6px; border-radius: 999px;
+    background: linear-gradient(180deg, #8DF5C0 0%, var(--mint) 55%, #34C383 100%);
+    box-shadow: 0 6px 22px rgba(91,227,161,.35), inset 0 1px 0 rgba(255,255,255,.7);
+    transition: transform .55s var(--spring), width .55s var(--spring); }
+  .switch .badge { display: inline-block; min-width: 8px; height: 8px; border-radius: 50%; background: var(--mango); margin-left: 8px;
+    vertical-align: middle; box-shadow: 0 0 10px var(--mango); animation: blink 1.2s ease-in-out infinite; }
+  @keyframes blink { 50% { opacity: .25; } }
+
+  /* ---------- glass ---------- */
+  .glass { position: relative; background: linear-gradient(180deg, rgba(36,92,70,.62) 0%, rgba(14,48,35,.72) 100%);
+    border: 1px solid var(--edge); border-radius: var(--r-lg); box-shadow: 0 30px 60px -30px rgba(0,0,0,.55); }
+  .glass::before { content: ""; position: absolute; inset: 0; border-radius: inherit; pointer-events: none;
+    background: linear-gradient(135deg, rgba(255,255,255,.16) 0%, rgba(255,255,255,0) 32%); }
+
+  /* ---------- overview ---------- */
+  .overview { display: grid; grid-template-columns: 300px 1fr; gap: 34px; padding: 30px; align-items: center; }
+  .gauge { position: relative; width: 100%; max-width: 300px; aspect-ratio: 1; margin: 0 auto; }
+  .gauge svg { width: 100%; height: 100%; display: block; overflow: visible; }
+  .gauge .w1, .gauge .w2, .gauge .bubble { will-change: transform; }
+  .gauge .ring { fill: none; stroke: rgba(255,255,255,.14); stroke-width: 2; }
+  .gauge .ring2 { fill: none; stroke: url(#rim); stroke-width: 5; stroke-linecap: round;
+    transition: stroke-dashoffset 1.8s var(--ease), stroke 1s; }
+  .gauge .tank { fill: rgba(0,0,0,.25); }
+  .gauge .level { transition: transform 1.8s var(--ease); }
+  .gauge .w1 { animation: wave 5.5s linear infinite; }
+  .gauge .w2 { animation: wave 8s linear infinite reverse; opacity: .55; }
+  @keyframes wave { from { transform: translateX(0); } to { transform: translateX(-100px); } }
+  .gauge .bubble { fill: rgba(255,255,255,.55); animation: rise 6s ease-in infinite; }
+  @keyframes rise { 0% { transform: translateY(0); opacity: 0; } 15% { opacity: .9; } 100% { transform: translateY(-150px); opacity: 0; } }
+  .gauge .gloss { fill: url(#gloss); pointer-events: none; }
+  .gauge-num { position: absolute; inset: 0; display: grid; place-content: center; text-align: center; pointer-events: none;
+    text-shadow: 0 2px 18px rgba(0,0,0,.45); }
+  .gauge-num strong { font-size: clamp(54px, 9vw, 76px); font-weight: 800; letter-spacing: -.04em; line-height: 1; }
+  .gauge-num strong sup { font-size: .42em; font-weight: 600; margin-left: 2px; vertical-align: .9em; }
+  .gauge-num small { display: block; margin-top: 6px; font-size: 14px; color: rgba(255,255,255,.88); font-weight: 500; }
+
+  .ov-title { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 14px; }
+  .ov-title h2 { margin: 0; font-size: 34px; font-weight: 700; letter-spacing: -.02em; }
+  .ov-title span { color: var(--faint); font-size: 15px; }
+  .stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin: 22px 0 24px; }
+  .stat { padding: 14px 16px; border-radius: var(--r-md); background: rgba(0,0,0,.18); border: 1px solid rgba(255,255,255,.07); }
+  .stat b { display: block; font-size: 28px; font-weight: 700; line-height: 1.1; letter-spacing: -.02em; }
+  .stat span { font-size: 13px; color: var(--mist); }
+  .stat.mint b { color: var(--mint); } .stat.mango b { color: var(--mango); } .stat.pome b { color: var(--pome); }
+
+  .actions { display: flex; flex-wrap: wrap; gap: 12px; }
+  .cta { position: relative; overflow: hidden; border: 0; cursor: pointer; padding: 16px 28px; border-radius: 999px;
+    font-size: 18px; font-weight: 700; color: #072015; display: inline-flex; align-items: center; gap: 12px;
+    background: linear-gradient(180deg, #A6F8CF 0%, var(--mint) 48%, #2FB777 100%);
+    box-shadow: 0 14px 34px -10px rgba(91,227,161,.6), inset 0 1px 0 rgba(255,255,255,.85), inset 0 -2px 0 rgba(0,0,0,.12);
+    transition: transform .25s var(--spring), box-shadow .3s; }
+  .cta::after { content: ""; position: absolute; top: 0; bottom: 0; width: 60px; left: -80px; transform: skewX(-20deg);
+    background: linear-gradient(90deg, transparent, rgba(255,255,255,.75), transparent); }
+  .cta:hover:not(:disabled) { transform: translateY(-2px); box-shadow: 0 20px 40px -12px rgba(91,227,161,.75), inset 0 1px 0 rgba(255,255,255,.85); }
+  .cta:hover:not(:disabled)::after { animation: shine .9s var(--ease); }
+  .cta:active:not(:disabled) { transform: translateY(1px) scale(.98); }
+  @keyframes shine { to { left: 120%; } }
+  .cta:disabled { cursor: progress; filter: saturate(.6) brightness(.9); }
+  .cta svg { width: 20px; height: 20px; }
+  .cta.busy svg { animation: spin 1s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .ghost { display: inline-flex; align-items: center; gap: 10px; padding: 15px 24px; border-radius: 999px; text-decoration: none;
+    color: var(--cream); font-weight: 600; border: 1px solid var(--edge); background: var(--glass-2); transition: background .3s, transform .25s var(--spring); }
+  .ghost:hover { background: rgba(255,255,255,.15); transform: translateY(-2px); }
+  .ghost[aria-disabled="true"] { opacity: .4; pointer-events: none; }
+  .ghost svg { width: 18px; height: 18px; }
+
+  .run { margin-top: 20px; }
+  .run[hidden] { display: none; }
+  .bar { height: 12px; border-radius: 999px; background: rgba(0,0,0,.3); overflow: hidden; border: 1px solid rgba(255,255,255,.08); }
+  .bar i { display: block; height: 100%; width: 0; border-radius: inherit; transition: width .9s var(--ease);
+    background: linear-gradient(90deg, var(--mint), #B7F7D6 50%, var(--mango));
+    background-size: 200% 100%; animation: flow 2.4s linear infinite; box-shadow: 0 0 18px rgba(91,227,161,.55); }
+  @keyframes flow { to { background-position: -200% 0; } }
+  .run-line { display: flex; justify-content: space-between; gap: 12px; margin-top: 10px; font-size: 15px; color: var(--mist); }
+  .run-line b { color: var(--cream); font-weight: 600; }
+
+  /* ---------- sections ---------- */
+  .sec-head { display: flex; flex-wrap: wrap; align-items: end; justify-content: space-between; gap: 12px; margin: 40px 0 14px; }
+  .sec-head h3 { margin: 0; font-size: 22px; font-weight: 700; letter-spacing: -.01em; }
+  .sec-head p { margin: 0; color: var(--faint); font-size: 14px; }
+
+  .branches { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 12px; }
+  .tile { position: relative; overflow: hidden; contain: layout paint; padding: 16px; border-radius: var(--r-md); background: var(--glass);
+    border: 1px solid var(--edge); min-height: 116px; transition: border-color .4s, background .4s, transform .3s var(--spring); }
+  .tile:hover { transform: translateY(-3px); }
+  .tile .nm { font-weight: 600; font-size: 15px; }
+  .tile .ct { margin-top: 8px; font-size: 26px; font-weight: 700; letter-spacing: -.02em; }
+  .tile .ct small { font-size: 14px; font-weight: 400; color: var(--faint); }
+  .tile .st { font-size: 13px; color: var(--mist); }
+  .tile .mini { position: absolute; left: 0; bottom: 0; height: 4px; background: var(--mint); transition: width 1.2s var(--ease); }
+  .tile.low .mini { background: var(--mango); } .tile.bad .mini { background: var(--pome); }
+  .tile.waiting { opacity: .55; }
+  .tile.running { border-color: rgba(91,227,161,.45); }
+  .tile.running::after { content: ""; position: absolute; inset: 0; transform: translateX(-100%);
+    background: linear-gradient(90deg, transparent, rgba(91,227,161,.18), transparent); animation: scan 1.6s ease-in-out infinite; }
+  @keyframes scan { to { transform: translateX(100%); } }
+  .tile.failed { border-color: rgba(255,92,122,.5); background: rgba(255,92,122,.08); }
+  .tile.failed .st { color: #FF9AAC; }
+  .tile.pop { animation: pop .7s var(--spring); }
+  @keyframes pop { 0% { transform: scale(.92); } 60% { transform: scale(1.05); } 100% { transform: scale(1); } }
+  .tile.pop::before { content: ""; position: absolute; inset: 0; border-radius: inherit; box-shadow: 0 0 0 2px var(--mint) inset;
+    animation: flash 1s ease-out forwards; }
+  @keyframes flash { to { opacity: 0; } }
+
+  .notes { display: grid; gap: 10px; margin-top: 14px; }
+  .note { padding: 14px 16px; border-radius: var(--r-md); font-size: 15px; border: 1px solid; }
+  .note.warn { background: rgba(255,181,71,.09); border-color: rgba(255,181,71,.35); color: #FFD69A; }
+  .note.bad { background: rgba(255,92,122,.09); border-color: rgba(255,92,122,.4); color: #FFB3C1; }
+  .note.info { background: rgba(91,227,161,.08); border-color: rgba(91,227,161,.3); color: #BDF5D8; }
+  .note b { color: var(--cream); }
+
+  /* ---------- table ---------- */
+  .tools { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+  .search { position: relative; }
+  .search input { width: min(280px, 70vw); padding: 11px 14px 11px 40px; border-radius: 999px; border: 1px solid var(--edge);
+    background: rgba(0,0,0,.25); outline: none; transition: border-color .3s, background .3s; }
+  .search input::placeholder { color: var(--faint); }
+  .search input:focus { border-color: var(--mint); background: rgba(0,0,0,.35); }
+  .search svg { position: absolute; left: 14px; top: 50%; width: 16px; height: 16px; transform: translateY(-50%); opacity: .6; }
+  .chips { display: flex; flex-wrap: wrap; gap: 6px; }
+  .chip { border: 1px solid var(--edge); background: transparent; color: var(--mist); padding: 8px 14px; border-radius: 999px;
+    cursor: pointer; font-size: 14px; transition: all .25s var(--ease); }
+  .chip[aria-pressed="true"] { background: var(--cream); color: #0A251B; border-color: var(--cream); font-weight: 600; }
+
+  .table-wrap { overflow: auto; max-height: 70vh; padding: 0; overscroll-behavior: contain; contain: content; }
+  table { border-collapse: separate; border-spacing: 0; width: 100%; font-size: 14px; }
+  thead th { position: sticky; top: 0; z-index: 2; background: #0E3326;
+    text-align: center; font-weight: 600; color: var(--mist); padding: 14px 10px; white-space: nowrap; border-bottom: 1px solid var(--edge); }
+  thead th:first-child { text-align: left; left: 0; z-index: 3; padding-left: 20px; }
+  tbody td { padding: 10px; text-align: center; border-bottom: 1px solid rgba(255,255,255,.05); white-space: nowrap; }
+  tbody td:first-child { position: sticky; left: 0; z-index: 1; text-align: left; white-space: normal; min-width: 240px; max-width: 340px;
+    background: #0F3528; padding-left: 20px; }
+  tbody tr { transition: background .2s; }
+  tbody tr:hover td { background-color: rgba(255,255,255,.035); }
+  tbody tr:hover td:first-child { background: #15432F; }
+  .pn { font-weight: 500; line-height: 1.3; }
+  .pm { font-size: 12px; color: var(--faint); margin-top: 2px; }
+  .q { display: inline-grid; place-items: center; min-width: 36px; height: 28px; padding: 0 8px; border-radius: 8px; font-weight: 600; font-variant-numeric: tabular-nums; }
+  .q.z { background: rgba(255,92,122,.16); color: #FF9AAC; }
+  .q.l { background: rgba(255,181,71,.15); color: #FFD08A; }
+  .q.g { background: rgba(91,227,161,.14); color: #9DF0C7; }
+  .q.u { color: var(--faint); }
+  .tot { font-weight: 700; font-variant-numeric: tabular-nums; }
+  .av { font-size: 13px; color: var(--mist); }
+  .empty { padding: 48px 24px; text-align: center; color: var(--mist); }
+  .empty b { display: block; color: var(--cream); font-size: 18px; margin-bottom: 6px; }
+
+  /* ---------- history ---------- */
+  .history { content-visibility: auto; contain-intrinsic-size: 400px; list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+  .history li { display: flex; align-items: center; justify-content: space-between; gap: 14px; padding: 14px 18px;
+    border-radius: var(--r-md); background: var(--glass); border: 1px solid rgba(255,255,255,.08); }
+  .history .when { font-weight: 600; }
+  .history .what { font-size: 13px; color: var(--faint); }
+  .history a { color: var(--mint); font-weight: 600; text-decoration: none; white-space: nowrap; }
+  .history a:hover { text-decoration: underline; }
+
+  /* ---------- footer ---------- */
+  footer { margin-top: 80px; padding: 40px 0 34px; border-top: 1px solid rgba(255,255,255,.08); text-align: center; }
+  footer img { height: 70px; width: auto; opacity: .95; }
+  footer p { margin: 14px 0 0; color: var(--faint); font-size: 14px; }
+  footer .credit { margin-top: 6px; color: var(--mist); }
+  footer .credit b { font-weight: 600; background: linear-gradient(90deg, var(--mint), var(--mango));
+    -webkit-background-clip: text; background-clip: text; color: transparent; }
+
+  /* ---------- toast + burst + setup ---------- */
+  #toasts { position: fixed; left: 50%; bottom: calc(22px + env(safe-area-inset-bottom)); transform: translateX(-50%);
+    display: grid; gap: 8px; z-index: 50; width: min(440px, calc(100% - 32px)); }
+  .toast { padding: 14px 18px; border-radius: 14px; background: rgba(10,37,27,.92); border: 1px solid var(--edge);
+    box-shadow: 0 20px 40px rgba(0,0,0,.4); font-size: 15px; animation: tin .5s var(--spring); }
+  .toast.bad { border-color: rgba(255,92,122,.5); }
+  .toast.out { animation: tout .35s ease forwards; }
+  @keyframes tin { from { transform: translateY(20px) scale(.96); opacity: 0; } }
+  @keyframes tout { to { transform: translateY(12px); opacity: 0; } }
+  #burst { position: fixed; inset: 0; pointer-events: none; z-index: 40; }
+  .setup { margin: 20px 0; }
+
+  /* ---------- one orchestrated entrance ---------- */
+  .rise { animation: rise-in .9s var(--ease) both; animation-delay: calc(var(--d, 0) * 90ms); }
+  @keyframes rise-in { from { opacity: 0; transform: translateY(22px); } }
+
+  @media (max-width: 860px) {
+    .overview { grid-template-columns: 1fr; gap: 20px; padding: 22px; }
+    .gauge { max-width: 240px; }
+    .ov-title { justify-content: center; text-align: center; }
+    .actions { justify-content: center; }
+  }
+  @media (max-width: 520px) {
+    .top img { height: 48px; }
+    .pc { font-size: 13px; padding: 7px 12px 7px 10px; }
+    .hero { padding-top: 20px; }
+    .hero p { font-size: 16px; }
+    .stats { grid-template-columns: repeat(3, 1fr); gap: 8px; }
+    .stat { padding: 12px; } .stat b { font-size: 22px; } .stat span { font-size: 12px; }
+    .switch { display: grid; width: 100%; }
+    .cta, .ghost { width: 100%; justify-content: center; }
+    tbody td:first-child { min-width: 180px; }
+    .history li { flex-direction: column; align-items: flex-start; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after { animation-duration: .001ms !important; animation-iteration-count: 1 !important; transition-duration: .001ms !important; }
+  }
+</style>
+</head>
+<body>
+<div class="aurora" aria-hidden="true"><span class="a1"></span><span class="a2"></span><span class="a3"></span><span class="a4"></span></div>
+
+<div class="wrap">
+  <header class="top rise" style="--d:0">
+    <img src="logo-white.png" alt="FreshQA">
+    <div class="pc" id="pc" role="status"><i></i><span id="pcText">Connecting…</span></div>
+  </header>
+
+  <section class="hero">
+    <h1 class="rise" style="--d:1">Where is FreshQA on the shelf right now?</h1>
+    <p class="rise" style="--d:2">Live stock for every Snoonu and Talabat branch. Tap Refresh now to check again, then download the Excel in your usual template.</p>
+  </section>
+
+  <div id="setup"></div>
+
+  <nav class="switch rise" style="--d:3" role="tablist" id="switch">
+    <span class="ind" id="ind"></span>
+    <button role="tab" data-src="snoonu" aria-selected="true">Snoonu</button>
+    <button role="tab" data-src="talabat" aria-selected="false">Talabat</button>
+  </nav>
+
+  <main id="panel">
+    <section class="overview glass rise" style="--d:4">
+      <div class="gauge" id="gauge">
+        <svg viewBox="0 0 200 200" aria-hidden="true">
+          <defs>
+            <clipPath id="clip"><circle cx="100" cy="100" r="86"/></clipPath>
+            <linearGradient id="liquid" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0" id="lq1" stop-color="#5FD69B"/><stop offset="1" id="lq2" stop-color="#14704A"/>
+            </linearGradient>
+            <linearGradient id="rim" x1="0" y1="0" x2="1" y2="1">
+              <stop offset="0" stop-color="#B7F7D6"/><stop offset="1" stop-color="#FFB547"/>
+            </linearGradient>
+            <radialGradient id="gloss" cx="35%" cy="25%" r="60%">
+              <stop offset="0" stop-color="#fff" stop-opacity=".38"/><stop offset=".45" stop-color="#fff" stop-opacity=".05"/><stop offset="1" stop-color="#fff" stop-opacity="0"/>
+            </radialGradient>
+          </defs>
+          <circle class="ring" cx="100" cy="100" r="97"/>
+          <circle class="ring2" id="arc" cx="100" cy="100" r="97" transform="rotate(-90 100 100)"
+                  stroke-dasharray="609.5" stroke-dashoffset="609.5"/>
+          <g clip-path="url(#clip)">
+            <rect class="tank" x="0" y="0" width="200" height="200"/>
+            <g class="level" id="level" style="transform: translateY(190px)">
+              <path class="w2" fill="url(#liquid)" d="M0 12 Q25 2 50 12 T100 12 T150 12 T200 12 T250 12 T300 12 T350 12 T400 12 V260 H0 Z"/>
+              <path class="w1" fill="url(#liquid)" d="M0 10 Q25 0 50 10 T100 10 T150 10 T200 10 T250 10 T300 10 T350 10 T400 10 V260 H0 Z"/>
+              <circle class="bubble" cx="60" cy="180" r="3" style="animation-delay:-1s"/>
+              <circle class="bubble" cx="120" cy="190" r="2" style="animation-delay:-3s"/>
+              <circle class="bubble" cx="150" cy="170" r="2.5" style="animation-delay:-4.5s"/>
+              <circle class="bubble" cx="90" cy="200" r="1.8" style="animation-delay:-2.2s"/>
+            </g>
+          </g>
+          <circle class="gloss" cx="100" cy="100" r="86"/>
+        </svg>
+        <div class="gauge-num"><strong><span id="pct">0</span><sup>%</sup></strong><small>shelf availability</small></div>
+      </div>
+
+      <div>
+        <div class="ov-title"><h2 id="srcName">Snoonu</h2><span id="updated">Loading…</span></div>
+        <div class="stats" id="stats">
+          <div class="stat mint"><b id="sFull">–</b><span>in every branch</span></div>
+          <div class="stat mango"><b id="sGap">–</b><span>missing somewhere</span></div>
+          <div class="stat pome"><b id="sOut">–</b><span>out everywhere</span></div>
+        </div>
+        <div class="actions">
+          <button class="cta" id="refreshBtn" type="button">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-2.64-6.36"/><path d="M21 3v6h-6"/></svg>
+            <span id="refreshText">Refresh now</span>
+          </button>
+          <a class="ghost" id="dlBtn" aria-disabled="true" href="#">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12"/><path d="m7 10 5 5 5-5"/><path d="M5 21h14"/></svg>
+            Download Excel
+          </a>
+        </div>
+        <div class="run" id="run" hidden>
+          <div class="bar"><i id="barFill"></i></div>
+          <div class="run-line"><span id="runMsg">Waiting for the office PC…</span><b id="runPct">0%</b></div>
+        </div>
+      </div>
+    </section>
+
+    <div class="sec-head rise" style="--d:5"><h3>Branches</h3><p id="branchNote"></p></div>
+    <div class="branches rise" style="--d:5" id="branches"></div>
+    <div class="notes" id="notes"></div>
+
+    <div class="sec-head rise" style="--d:6">
+      <h3>Products</h3>
+      <div class="tools">
+        <label class="search"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+          <input id="q" type="search" placeholder="Search products" autocomplete="off" aria-label="Search products"></label>
+        <div class="chips" id="chips">
+          <button class="chip" data-f="all" aria-pressed="true">All</button>
+          <button class="chip" data-f="gap" aria-pressed="false">Missing somewhere</button>
+          <button class="chip" data-f="out" aria-pressed="false">Out everywhere</button>
+          <button class="chip" data-f="full" aria-pressed="false">Fully stocked</button>
+        </div>
+      </div>
+    </div>
+    <div class="table-wrap glass rise" style="--d:6" id="tableWrap"></div>
+
+    <div class="sec-head"><h3>Earlier refreshes</h3><p>Kept for 60 days</p></div>
+    <ul class="history" id="history"></ul>
+  </main>
+
+  <footer>
+    <img src="logo-white.png" alt="FreshQA">
+    <p>© <span id="yr"></span> FreshQA. All rights reserved.</p>
+    <p class="credit">Designed &amp; developed by <b>Asif</b></p>
+  </footer>
+</div>
+
+<canvas id="burst" aria-hidden="true"></canvas>
+<div id="toasts" aria-live="polite"></div>
+
+<script>
+(() => {
+  const CFG = window.FRESHQA_CONFIG;
+  const SOURCES = {
+    snoonu:  { name: 'Snoonu', eta: 'about 30 seconds',
+               branches: ['Al Saad','Umm Salal Ali','Lusail','Industry Area','Wakra','Bani Hajer','Al Khor','Shahaniya'] },
+    talabat: { name: 'Talabat', eta: 'a few minutes',
+               branches: ['Wukair','Al Rayyan','Bin Omran','Gharafa','Muntaza','Um Salal Mohamed','Um Salal Ali','Lusail','Al khor','Abu Hamour','Thumama'] }
+  };
+  const ONLINE_MS = 45000;
+  const $ = id => document.getElementById(id);
+  const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+  const store = { get(k) { try { return localStorage.getItem(k); } catch (e) { return null; } },
+                  set(k, v) { try { localStorage.setItem(k, v); } catch (e) {} } };
+
+  const state = {
+    src: SOURCES[store.get('fq-src')] ? store.get('fq-src') : 'snoonu',
+    lastSeen: 0,
+    filter: 'all', query: '',
+    d: { snoonu: blank(), talabat: blank() },
+    tileStates: {}
+  };
+  function blank() { return { latest: null, active: null, lastError: null, history: [], loaded: false }; }
+
+  $('yr').textContent = new Date().getFullYear();
+
+  // ---------------- setup check ----------------
+  const BASE = (() => { try { return new URL(String(CFG.SUPABASE_URL).trim()).origin; } catch (e) { return String(CFG.SUPABASE_URL).trim().replace(/\/+$/, ''); } })();
+  const KEY = String(CFG.SUPABASE_ANON_KEY).trim();
+  const configured = CFG && !String(CFG.SUPABASE_URL).includes('PASTE') && !String(CFG.SUPABASE_ANON_KEY).includes('PASTE');
+  let sb = null;
+  if (!configured || !window.supabase) {
+    $('setup').innerHTML = '<div class="note warn setup"><b>Almost there.</b> Open index.html and paste your Supabase project URL and anon key into FRESHQA_CONFIG at the top, then upload the site again.</div>';
+  } else {
+    sb = window.supabase.createClient(BASE, KEY, { auth: { persistSession: false } });
+  }
+
+  // ---------------- time helpers ----------------
+  const fmtTime = d => new Date(d).toLocaleString([], { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
+  function ago(d) {
+    const s = Math.max(0, (Date.now() - new Date(d)) / 1000);
+    if (s < 60) return 'just now';
+    if (s < 3600) return Math.round(s / 60) + ' min ago';
+    if (s < 86400) return Math.round(s / 3600) + ' h ago';
+    return fmtTime(d);
+  }
+
+  // ---------------- data ----------------
+  async function loadSource(src) {
+    if (!sb) return;
+    const [lat, act, last, hist] = await Promise.all([
+      sb.from('jobs').select('*').eq('source', src).eq('status', 'done').order('finished_at', { ascending: false }).limit(1),
+      sb.from('jobs').select('id,source,status,requested_at,started_at,progress,message').eq('source', src).in('status', ['pending', 'running']).order('requested_at', { ascending: false }).limit(1),
+      sb.from('jobs').select('id,status,error,requested_at,finished_at').eq('source', src).order('requested_at', { ascending: false }).limit(1),
+      sb.from('jobs').select('id,finished_at,file_path,message').eq('source', src).eq('status', 'done').order('finished_at', { ascending: false }).limit(9)
+    ]);
+    const err = lat.error || act.error || last.error || hist.error;
+    if (err) { toast('Could not load ' + SOURCES[src].name + ': ' + err.message, true); return; }
+    const d = state.d[src];
+    d.latest = lat.data[0] || null;
+    d.active = act.data[0] || null;
+    d.lastError = last.data[0] && last.data[0].status === 'error' ? last.data[0] : null;
+    d.history = hist.data.slice(1);
+    d.loaded = true;
+  }
+
+  async function loadAgent() {
+    if (!sb) return;
+    const { data } = await sb.from('agent_status').select('last_seen').eq('id', 1).maybeSingle();
+    if (data && data.last_seen) state.lastSeen = Date.parse(data.last_seen);
+  }
+
+  function subscribe() {
+    if (!sb) return;
+    sb.channel('freshqa-live')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'jobs' }, onJob)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'agent_status' }, p => {
+        if (p.new && p.new.last_seen) { state.lastSeen = Date.parse(p.new.last_seen); renderPc(); }
+      })
+      .subscribe();
+  }
+
+  async function onJob(p) {
+    const j = p.new;
+    if (!j || !SOURCES[j.source]) return;
+    const d = state.d[j.source];
+    if (j.status === 'pending' || j.status === 'running') {
+      d.active = Object.assign({}, d.active && d.active.id === j.id ? d.active : {}, j);
+      d.lastError = null;
+      if (j.source === state.src) renderRun(), renderBranches();
+      renderTabs();
+    } else if (j.status === 'done') {
+      const wasWatching = d.active && d.active.id === j.id;
+      d.active = null;
+      await loadSource(j.source);
+      if (j.source === state.src) { renderPanel(); if (wasWatching) celebrate(); }
+      renderTabs();
+      toast(SOURCES[j.source].name + ' stock updated' + (j.message ? ': ' + j.message : ''));
+    } else if (j.status === 'error') {
+      d.active = null;
+      d.lastError = j;
+      if (j.source === state.src) renderPanel();
+      renderTabs();
+      toast(SOURCES[j.source].name + ' refresh failed. ' + (j.error || ''), true);
+    }
+  }
+
+  async function refresh() {
+    if (!sb) return;
+    const src = state.src;
+    $('refreshBtn').disabled = true;
+    const { data, error } = await sb.rpc('request_refresh', { p_source: src });
+    if (error) { $('refreshBtn').disabled = false; toast('Could not start the refresh: ' + error.message, true); return; }
+    state.d[src].active = data;
+    state.d[src].lastError = null;
+    renderPanel(); renderTabs();
+    if (!pcOnline()) toast('The office PC is offline. Your refresh is saved and will run as soon as it is back on.');
+  }
+
+  // ---------------- rendering ----------------
+  const pcOnline = () => state.lastSeen && Date.now() - state.lastSeen < ONLINE_MS;
+
+  function renderPc() {
+    const on = pcOnline();
+    $('pc').classList.toggle('on', !!on);
+    $('pcText').textContent = !sb ? 'Not set up yet'
+      : on ? 'Office PC online'
+      : state.lastSeen ? 'Office PC offline since ' + fmtTime(state.lastSeen) : 'Office PC not connected yet';
+  }
+
+  function renderTabs() {
+    document.querySelectorAll('#switch button').forEach(b => {
+      const src = b.dataset.src, sel = src === state.src;
+      b.setAttribute('aria-selected', sel);
+      b.innerHTML = SOURCES[src].name + (state.d[src].active ? '<span class="badge" title="Refreshing"></span>' : '');
+    });
+    moveIndicator();
+  }
+  function moveIndicator() {
+    const btn = document.querySelector('#switch button[aria-selected="true"]');
+    if (!btn) return;
+    $('ind').style.width = btn.offsetWidth + 'px';
+    $('ind').style.transform = 'translateX(' + (btn.offsetLeft - 6) + 'px)';
+  }
+
+  function result() { const l = state.d[state.src].latest; return l && l.result && Array.isArray(l.result.rows) ? l.result : null; }
+  function branchList() { const r = result(); return (r && r.branches) || SOURCES[state.src].branches; }
+
+  function summarize(r) {
+    if (!r) return null;
+    let cells = 0, stocked = 0, full = 0, gap = 0, out = 0;
+    r.rows.forEach(row => {
+      const known = row[3].filter(v => v !== null);
+      const pos = known.filter(v => v > 0).length;
+      cells += known.length; stocked += pos;
+      if (!known.length) return;
+      if (pos === known.length) full++;
+      else if (pos === 0) out++;
+      if (pos < known.length) gap++;
+    });
+    return { pct: cells ? Math.round(stocked / cells * 100) : 0, full, gap, out };
+  }
+
+  function renderOverview() {
+    const src = state.src, d = state.d[src], r = result(), s = summarize(r);
+    $('srcName').textContent = SOURCES[src].name;
+    const upd = $('updated');
+    if (!sb) upd.textContent = '';
+    else if (!d.loaded) upd.textContent = 'Loading…';
+    else if (d.latest) { upd.textContent = 'Updated ' + ago(d.latest.finished_at); upd.title = fmtTime(d.latest.finished_at); }
+    else upd.textContent = 'No data yet';
+
+    setGauge(s ? s.pct : 0);
+    countTo($('sFull'), s ? s.full : null);
+    countTo($('sGap'), s ? s.gap : null);
+    countTo($('sOut'), s ? s.out : null);
+
+    const dl = $('dlBtn');
+    if (d.latest && d.latest.file_path) {
+      dl.href = fileUrl(d.latest.file_path);
+      dl.setAttribute('aria-disabled', 'false');
+    } else { dl.href = '#'; dl.setAttribute('aria-disabled', 'true'); }
+  }
+
+  function fileUrl(path) {
+    const name = path.split('/').pop();
+    return BASE + '/storage/v1/object/public/reports/' +
+      path.split('/').map(encodeURIComponent).join('/') + '?download=' + encodeURIComponent(name);
+  }
+
+  let gaugePct = -1;
+  function setGauge(pct) {
+    if (pct === gaugePct) return;
+    gaugePct = pct;
+    const top = 186 - pct * 1.72;               // liquid surface inside the 86px circle
+    $('level').style.transform = 'translateY(' + (top - 10) + 'px)';
+    $('arc').style.strokeDashoffset = 609.5 * (1 - pct / 100);
+    const [a, b] = pct >= 75 ? ['#5FD69B', '#14704A'] : pct >= 45 ? ['#F2B556', '#B86E08'] : ['#F2788F', '#A82640'];
+    $('lq1').setAttribute('stop-color', a); $('lq2').setAttribute('stop-color', b);
+    countTo($('pct'), pct);
+  }
+
+  function countTo(el, to) {
+    if (to === null || to === undefined) { el.textContent = '–'; el.dataset.v = ''; return; }
+    const from = Number(el.dataset.v || 0);
+    el.dataset.v = to;
+    if (reduced || from === to) { el.textContent = to; return; }
+    const t0 = performance.now(), dur = 1400;
+    const step = t => {
+      const k = Math.min(1, (t - t0) / dur), e = 1 - Math.pow(1 - k, 3);
+      el.textContent = Math.round(from + (to - from) * e);
+      if (k < 1 && el.dataset.v == to) requestAnimationFrame(step);
+    };
+    requestAnimationFrame(step);
+  }
+
+  function renderRun() {
+    const d = state.d[state.src], a = d.active, btn = $('refreshBtn');
+    btn.disabled = !!a || !sb;
+    btn.classList.toggle('busy', !!a);
+    $('refreshText').textContent = a ? 'Refreshing…' : 'Refresh now';
+    $('run').hidden = !a;
+    if (!a) return;
+    const pct = a.status === 'pending' ? 0 : Math.max(2, (a.progress && a.progress.pct) || 2);
+    $('barFill').style.width = pct + '%';
+    $('runPct').textContent = pct + '%';
+    $('runMsg').textContent = a.status === 'pending'
+      ? (pcOnline() ? 'Waiting for the office PC to pick this up…' : 'The office PC is offline. This will run when it is back on.')
+      : (a.message || 'Working…') + ' (takes ' + SOURCES[state.src].eta + ')';
+  }
+
+  function renderBranches() {
+    const src = state.src, r = result(), d = state.d[src], a = d.active;
+    const prog = a && a.status === 'running' && a.progress && a.progress.branches || {};
+    const names = branchList();
+    const total = r ? r.rows.length : 0;
+    $('branchNote').textContent = r ? total + ' products tracked in each branch' : '';
+    $('branches').innerHTML = names.map((name, i) => {
+      let cls = 'tile', ct = '<span style="opacity:.4">–</span>', st = 'No data yet', w = 0;
+      if (r) {
+        const vals = r.rows.map(row => row[3][i]);
+        const known = vals.filter(v => v !== null && v !== undefined);
+        if (!known.length) { cls += ' failed'; st = 'Not loaded last time'; }
+        else {
+          const inStock = known.filter(v => v > 0).length;
+          const units = known.reduce((x, v) => x + (v > 0 ? v : 0), 0);
+          w = Math.round(inStock / known.length * 100);
+          ct = inStock + ' <small>/ ' + known.length + '</small>';
+          st = units.toLocaleString() + ' units in stock';
+          if (w < 45) cls += ' bad'; else if (w < 75) cls += ' low';
+        }
+      }
+      const p = prog[name];
+      const live = a ? (a.status === 'pending' ? 'waiting' : (p && p.state) || 'waiting') : null;
+      if (live === 'waiting') { cls += ' waiting'; st = 'Waiting'; }
+      if (live === 'running') { cls += ' running'; st = 'Checking now'; }
+      if (live === 'failed') { cls += ' failed'; st = 'Could not load'; }
+      if (live === 'done') { st = (p.count != null ? p.count + ' items found' : 'Done'); }
+      const key = src + '|' + name, prev = state.tileStates[key];
+      if (live === 'done' && prev && prev !== 'done') cls += ' pop';
+      state.tileStates[key] = live || 'idle';
+      return '<div class="' + cls + '"><div class="nm">' + esc(name) + '</div><div class="ct">' + ct +
+        '</div><div class="st">' + esc(st) + '</div><span class="mini" style="width:' + w + '%"></span></div>';
+    }).join('');
+  }
+
+  function renderNotes() {
+    const d = state.d[state.src], r = result(), out = [];
+    if (d.lastError && (!d.latest || new Date(d.lastError.requested_at) > new Date(d.latest.finished_at))) {
+      out.push('<div class="note bad"><b>The last refresh did not finish.</b> ' + esc(d.lastError.error || '') + ' Tap Refresh now to try again.</div>');
+    }
+    if (r && r.incomplete && r.incomplete.length) {
+      out.push('<div class="note warn"><b>' + r.incomplete.length + ' branch' + (r.incomplete.length > 1 ? 'es' : '') +
+        ' could not be loaded:</b> ' + r.incomplete.map(esc).join(', ') +
+        '. Their column is left empty (not 0), so nothing shows as falsely out of stock.</div>');
+    }
+    if (r && r.new_products && r.new_products.length) {
+      const n = r.new_products.length;
+      out.push('<div class="note info"><b>' + n + ' new product' + (n > 1 ? 's' : '') + ' found</b> and added at the bottom of the Excel: ' +
+        r.new_products.slice(0, 6).map(esc).join(', ') + (n > 6 ? ' and ' + (n - 6) + ' more' : '') + '.</div>');
+    }
+    $('notes').innerHTML = out.join('');
+  }
+
+  let tableKey = '';
+  function renderTable() {
+    const r = result(), wrap = $('tableWrap');
+    const l = state.d[state.src].latest;
+    const key = state.src + '|' + (l ? l.id : '-') + '|' + state.filter + '|' + state.query + '|' + !!sb;
+    if (key === tableKey) return;
+    tableKey = key;
+    if (!r) {
+      wrap.innerHTML = '<div class="empty"><b>No stock data yet</b>' +
+        (sb ? 'Tap Refresh now to run the first check.' : 'Finish the setup to see stock here.') + '</div>';
+      return;
+    }
+    const names = r.branches, q = state.query.trim().toLowerCase();
+    const rows = r.rows.filter(row => {
+      if (q && !(row[0] + ' ' + row[1]).toLowerCase().includes(q)) return false;
+      const known = row[3].filter(v => v !== null), pos = known.filter(v => v > 0).length;
+      if (state.filter === 'gap') return known.length && pos < known.length;
+      if (state.filter === 'out') return known.length && pos === 0;
+      if (state.filter === 'full') return known.length && pos === known.length;
+      return true;
+    });
+    if (!rows.length) { wrap.innerHTML = '<div class="empty"><b>Nothing matches</b>Try a different search or filter.</div>'; return; }
+    const head = '<thead><tr><th>Product</th>' + names.map(n => '<th>' + esc(n) + '</th>').join('') +
+      '<th>Total</th><th>Branches</th></tr></thead>';
+    const body = rows.map(row => {
+      const known = row[3].filter(v => v !== null), pos = known.filter(v => v > 0).length;
+      const total = known.reduce((x, v) => x + v, 0);
+      const meta = [row[1], row[2] != null ? 'QAR ' + Number(row[2]).toFixed(2) : ''].filter(Boolean).join(', ');
+      return '<tr><td><div class="pn">' + esc(row[0]) + '</div>' + (meta ? '<div class="pm">' + esc(meta) + '</div>' : '') + '</td>' +
+        row[3].map(v => v === null ? '<td><span class="q u">–</span></td>'
+          : '<td><span class="q ' + (v <= 0 ? 'z' : v <= 3 ? 'l' : 'g') + '">' + v + '</span></td>').join('') +
+        '<td class="tot">' + total + '</td><td class="av">' + pos + ' / ' + known.length + '</td></tr>';
+    }).join('');
+    wrap.innerHTML = '<table>' + head + '<tbody>' + body + '</tbody></table>';
+  }
+
+  let histKey = '';
+  function renderHistory() {
+    const h = state.d[state.src].history;
+    const key = state.src + '|' + h.map(j => j.id).join(',');
+    if (key === histKey) return;
+    histKey = key;
+    $('history').innerHTML = h.length ? h.map(j =>
+      '<li><div><div class="when">' + esc(fmtTime(j.finished_at)) + '</div><div class="what">' + esc(j.message || '') + '</div></div>' +
+      (j.file_path ? '<a href="' + fileUrl(j.file_path) + '">Download Excel</a>' : '') + '</li>').join('')
+      : '<li><div class="what">Earlier refreshes will appear here.</div></li>';
+  }
+
+  function renderPanel() { renderOverview(); renderRun(); renderBranches(); renderNotes(); renderTable(); renderHistory(); }
+
+  // ---------------- celebration: juice droplets ----------------
+  function celebrate() {
+    if (reduced) return;
+    const c = $('burst'), ctx = c.getContext('2d'), dpr = devicePixelRatio || 1;
+    c.width = innerWidth * dpr; c.height = innerHeight * dpr; ctx.scale(dpr, dpr);
+    const g = $('gauge').getBoundingClientRect(), ox = g.left + g.width / 2, oy = g.top + g.height / 2;
+    const cols = ['#5BE3A1', '#8DF5C0', '#FFB547', '#FFD58A', '#FF5C7A', '#FFFFFF'];
+    const ps = Array.from({ length: 90 }, () => {
+      const a = Math.random() * Math.PI * 2, v = 4 + Math.random() * 9;
+      return { x: ox, y: oy, vx: Math.cos(a) * v, vy: Math.sin(a) * v - 4, r: 3 + Math.random() * 5, c: cols[Math.random() * cols.length | 0], life: 1 };
+    });
+    let t0 = performance.now();
+    (function frame(t) {
+      const dt = Math.min(2, (t - t0) / 16.7); t0 = t;
+      ctx.clearRect(0, 0, innerWidth, innerHeight);
+      let alive = false;
+      ps.forEach(p => {
+        p.vy += .32 * dt; p.vx *= .985; p.x += p.vx * dt; p.y += p.vy * dt; p.life -= .012 * dt;
+        if (p.life <= 0) return;
+        alive = true;
+        ctx.globalAlpha = Math.max(0, p.life);
+        ctx.fillStyle = p.c;
+        ctx.beginPath(); ctx.ellipse(p.x, p.y, p.r * .8, p.r * 1.15, Math.atan2(p.vy, p.vx) + Math.PI / 2, 0, Math.PI * 2); ctx.fill();
+      });
+      if (alive) requestAnimationFrame(frame); else ctx.clearRect(0, 0, innerWidth, innerHeight);
+    })(t0);
+  }
+
+  // ---------------- toasts ----------------
+  function toast(msg, bad) {
+    const el = document.createElement('div');
+    el.className = 'toast' + (bad ? ' bad' : '');
+    el.textContent = msg;
+    $('toasts').appendChild(el);
+    setTimeout(() => { el.classList.add('out'); setTimeout(() => el.remove(), 400); }, bad ? 7000 : 4500);
+  }
+
+  // ---------------- events ----------------
+  $('switch').addEventListener('click', e => {
+    const b = e.target.closest('button'); if (!b || b.dataset.src === state.src) return;
+    state.src = b.dataset.src; store.set('fq-src', state.src);
+    gaugePct = -1; renderTabs(); renderPanel();
+  });
+  $('refreshBtn').addEventListener('click', refresh);
+  $('dlBtn').addEventListener('click', e => { if ($('dlBtn').getAttribute('aria-disabled') === 'true') e.preventDefault(); });
+  let qTimer; $('q').addEventListener('input', e => { clearTimeout(qTimer); qTimer = setTimeout(() => { state.query = e.target.value; renderTable(); }, 120); });
+  $('chips').addEventListener('click', e => {
+    const b = e.target.closest('.chip'); if (!b) return;
+    state.filter = b.dataset.f;
+    document.querySelectorAll('.chip').forEach(c => c.setAttribute('aria-pressed', c === b));
+    renderTable();
+  });
+  addEventListener('resize', moveIndicator);
+  document.addEventListener('visibilitychange', () => { if (!document.hidden) boot(true); });
+
+  // ---------------- start ----------------
+  async function boot(quiet) {
+    if (sb) {
+      try { await Promise.all([loadSource('snoonu'), loadSource('talabat'), loadAgent()]); }
+      catch (e) { if (!quiet) toast('Could not reach the database: ' + e.message, true); }
+    }
+    renderPc(); renderTabs(); renderPanel();
+  }
+
+  renderTabs(); renderPanel(); renderPc();
+  boot().then(subscribe);
+
+  // safety nets if live updates drop (e.g. phone was asleep)
+  setInterval(renderPc, 5000);
+  setInterval(() => { if (state.d.snoonu.active || state.d.talabat.active) boot(true); else loadAgent().then(renderPc); }, 15000);
+  setInterval(() => renderOverview(), 30000);
+})();
+</script>
+</body>
+</html>
