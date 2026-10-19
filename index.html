@@ -22,7 +22,7 @@
     SUPABASE_URL: "https://zraicjnfeycewtgufamd.supabase.co/rest/v1/",
     SUPABASE_ANON_KEY: "sb_publishable_RCGWDOP1XaSP5vghVTeC8w__xIJcHIl",
     // Notifications: paste the PUBLIC key printed by make_push_keys.py on the office PC
-    VAPID_PUBLIC_KEY: "BJPuVIVZWEWMCS_rfdRe7UbLklWRx3XMQDTYn7QthL28HiA6WX0GKLHIP8lpck-8kuWVJLjK2lxyqtjKx0U9itw"
+    VAPID_PUBLIC_KEY: "PASTE_YOUR_VAPID_PUBLIC_KEY"
   };
 </script>
 <style>
@@ -445,7 +445,7 @@
   const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
   const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
 
-  // ---------------- "Talabat finished" notifications ----------------
+  // ---------------- "Refresh finished" notifications (Snoonu + Talabat) ----------------
   const VAPID = String((CFG && CFG.VAPID_PUBLIC_KEY) || '').trim();
   const pushReady = VAPID && !VAPID.includes('PASTE');
   const pushSupported = 'serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window;
@@ -491,8 +491,8 @@
       if (error) throw error;
       pushOn = true;
       renderNotify();
-      toast('Done. This device will be notified every time Talabat finishes.');
-      swReg.showNotification('FreshQA Stock', { body: 'Talabat notifications are on for this device.', icon: 'icon-192.png', tag: 'freshqa-test' });
+      toast('Done. This device will be notified every time Snoonu or Talabat finishes.');
+      swReg.showNotification('FreshQA Stock', { body: 'Notifications are on for this device (Snoonu and Talabat).', icon: 'icon-192.png', tag: 'freshqa-test' });
     } catch (e) {
       toast('Could not turn on notifications: ' + (e.message || e), true);
     }
@@ -505,17 +505,17 @@
     } catch (e) {}
     pushOn = false;
     renderNotify();
-    toast('Talabat notifications turned off on this device.');
+    toast('Notifications turned off on this device.');
   }
 
   function renderNotify() {
     const btn = $('notifyBtn');
-    btn.hidden = state.src !== 'talabat' || !sb;
+    btn.hidden = !sb;
     const denied = pushSupported && Notification.permission === 'denied';
     btn.classList.toggle('on', pushOn);
     btn.classList.toggle('off-state', denied);
     $('notifyText').textContent = pushOn ? 'Notifications on' : denied ? 'Notifications blocked' : 'Notify me when done';
-    btn.title = pushOn ? 'Tap to turn off notifications on this device' : 'Get a notification on this device when Talabat finishes';
+    btn.title = pushOn ? 'Tap to turn off notifications on this device' : 'Get a notification on this device when Snoonu or Talabat finishes';
   }
 
   function primeAudio() {  // must start from a tap, browsers block sound otherwise
@@ -534,16 +534,17 @@
     } catch (e) {}
   }
 
-  // Called when a Talabat refresh ends while this page is open (in any tab).
-  function talabatFinished(j, ok) {
-    const title = ok ? 'Talabat stock is ready' : 'Talabat refresh failed';
+  // Called when a refresh ends while this page is open (in any tab).
+  function refreshFinished(j, ok) {
+    const name = SOURCES[j.source].name;
+    const title = ok ? name + ' stock is ready' : name + ' refresh failed';
     const body = ok ? ((j.message || 'Stock updated') + '. Tap to open.') : (j.error || 'Tap to see what happened.');
     chime();
     if (document.hidden) {
       document.title = (ok ? '\u2713 ' : '\u26A0 ') + title;
       // If this device is not subscribed to push, show a notification from the page itself.
       if (!pushOn && swReg && pushSupported && Notification.permission === 'granted') {
-        swReg.showNotification(title, { body, icon: 'icon-192.png', badge: 'icon-192.png', tag: 'talabat-' + j.id, renotify: true });
+        swReg.showNotification(title, { body, icon: 'icon-192.png', badge: 'icon-192.png', tag: j.source + '-' + j.id, renotify: true });
       }
     }
   }
@@ -635,7 +636,7 @@
       if (j.source === state.src) { renderPanel(); if (wasWatching) celebrate(); }
       renderTabs();
       toast(SOURCES[j.source].name + ' stock updated' + (j.message ? ': ' + j.message : ''));
-      if (j.source === 'talabat' && wasWatching) talabatFinished(j, true);
+      if (wasWatching) refreshFinished(j, true);
     } else if (j.status === 'error') {
       const wasActive = !!d.active;
       d.active = null;
@@ -643,7 +644,7 @@
       if (j.source === state.src) renderPanel();
       renderTabs();
       toast(SOURCES[j.source].name + ' refresh failed. ' + (j.error || ''), true);
-      if (j.source === 'talabat' && wasActive) talabatFinished(j, false);
+      if (wasActive) refreshFinished(j, false);
     }
   }
 
