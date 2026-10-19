@@ -6,15 +6,19 @@ self.addEventListener('activate', (e) => e.waitUntil(self.clients.claim()));
 self.addEventListener('push', (e) => {
   let d = {};
   try { d = e.data ? e.data.json() : {}; } catch (err) { d = { body: e.data ? e.data.text() : '' }; }
-  e.waitUntil(self.registration.showNotification(d.title || 'FreshQA Stock', {
-    body: d.body || '',
-    icon: 'icon-192.png',
-    badge: 'icon-192.png',
-    tag: d.tag || 'freshqa',
-    renotify: true,
-    requireInteraction: false,
-    data: { url: d.url || './' },
-  }));
+  const tag = d.tag || 'freshqa';
+  e.waitUntil((async () => {
+    // If the open page already showed this one, replace it quietly instead of alerting twice.
+    const existing = await self.registration.getNotifications({ tag });
+    await self.registration.showNotification(d.title || 'FreshQA Stock', {
+      body: d.body || '',
+      icon: 'icon-192.png',
+      badge: 'icon-192.png',
+      tag,
+      renotify: existing.length === 0,
+      data: { url: d.url || './' },
+    });
+  })());
 });
 
 self.addEventListener('notificationclick', (e) => {
