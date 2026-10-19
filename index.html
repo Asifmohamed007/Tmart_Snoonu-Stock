@@ -6,7 +6,11 @@
 <meta name="theme-color" content="#0A251B">
 <title>FreshQA Stock Radar</title>
 <link rel="icon" href="favicon.png">
-<link rel="apple-touch-icon" href="favicon.png">
+<link rel="apple-touch-icon" href="icon-192.png">
+<link rel="manifest" href="manifest.json">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="FreshQA Stock">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
@@ -16,7 +20,9 @@
   // These are PUBLIC by design (the "anon" / "publishable" key). Never put the service/secret key here.
   window.FRESHQA_CONFIG = {
     SUPABASE_URL: "https://zraicjnfeycewtgufamd.supabase.co/rest/v1/",
-    SUPABASE_ANON_KEY: "sb_publishable_RCGWDOP1XaSP5vghVTeC8w__xIJcHIl"
+    SUPABASE_ANON_KEY: "sb_publishable_RCGWDOP1XaSP5vghVTeC8w__xIJcHIl",
+    // Notifications: paste the PUBLIC key printed by make_push_keys.py on the office PC
+    VAPID_PUBLIC_KEY: "BJPuVIVZWEWMCS_rfdRe7UbLklWRx3XMQDTYn7QthL28HiA6WX0GKLHIP8lpck-8kuWVJLjK2lxyqtjKx0U9itw"
   };
 </script>
 <style>
@@ -163,6 +169,12 @@
   .ghost:hover { background: rgba(255,255,255,.15); transform: translateY(-2px); }
   .ghost[aria-disabled="true"] { opacity: .4; pointer-events: none; }
   .ghost svg { width: 18px; height: 18px; }
+  button.ghost { cursor: pointer; font: inherit; font-weight: 600; }
+  .bell[hidden] { display: none; }
+  .bell.on { border-color: rgba(91,227,161,.55); background: rgba(91,227,161,.14); color: #CFF7E3; }
+  .bell.on svg { color: var(--mint); animation: ring 1.6s ease-in-out 1; transform-origin: 50% 10%; }
+  .bell.off-state { opacity: .75; }
+  @keyframes ring { 10%, 30% { transform: rotate(14deg); } 20%, 40% { transform: rotate(-14deg); } 50% { transform: none; } }
 
   .run { margin-top: 20px; }
   .run[hidden] { display: none; }
@@ -374,6 +386,10 @@
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12"/><path d="m7 10 5 5 5-5"/><path d="M5 21h14"/></svg>
             Download Excel
           </a>
+          <button class="ghost bell" id="notifyBtn" type="button" hidden>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/></svg>
+            <span id="notifyText">Notify me when done</span>
+          </button>
         </div>
         <div class="run" id="run" hidden>
           <div class="bar"><i id="barFill"></i></div>
@@ -428,6 +444,110 @@
   const $ = id => document.getElementById(id);
   const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
   const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+  // ---------------- "Talabat finished" notifications ----------------
+  const VAPID = String((CFG && CFG.VAPID_PUBLIC_KEY) || '').trim();
+  const pushReady = VAPID && !VAPID.includes('PASTE');
+  const pushSupported = 'serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window;
+  const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+  const standalone = matchMedia('(display-mode: standalone)').matches || navigator.standalone === true;
+  let swReg = null, pushOn = false, audioCtx = null;
+  const baseTitle = document.title;
+
+  function b64ToBytes(b64) {
+    const pad = '='.repeat((4 - b64.length % 4) % 4);
+    const raw = atob((b64 + pad).replace(/-/g, '+').replace(/_/g, '/'));
+    return Uint8Array.from(raw, c => c.charCodeAt(0));
+  }
+
+  async function initPush() {
+    if (!('serviceWorker' in navigator)) return renderNotify();
+    try {
+      swReg = await navigator.serviceWorker.register('sw.js');
+      if (pushSupported && Notification.permission === 'granted') {
+        const sub = await swReg.pushManager.getSubscription();
+        pushOn = !!sub;
+        if (sub && sb) sb.rpc('save_push_subscription', { p_sub: sub.toJSON(), p_ua: navigator.userAgent });  // keep it fresh
+      }
+    } catch (e) { /* notifications just stay off */ }
+    renderNotify();
+  }
+
+  async function enablePush() {
+    if (isIOS && !standalone) {
+      toast('On iPhone or iPad: tap Share, then "Add to Home Screen". Open FreshQA from that icon and turn this on there.');
+      return;
+    }
+    if (!pushSupported) { toast('This browser does not support notifications. Try Chrome, Edge, Firefox or Safari.', true); return; }
+    if (!pushReady) { toast('Notifications are not set up yet: the VAPID public key is missing in index.html.', true); return; }
+    const perm = await Notification.requestPermission();
+    if (perm !== 'granted') { renderNotify(); toast('Notifications are blocked for this site. Allow them in the browser\'s site settings.', true); return; }
+    try {
+      swReg = swReg || await navigator.serviceWorker.register('sw.js');
+      await navigator.serviceWorker.ready;
+      let sub = await swReg.pushManager.getSubscription();
+      if (!sub) sub = await swReg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: b64ToBytes(VAPID) });
+      const { error } = await sb.rpc('save_push_subscription', { p_sub: sub.toJSON(), p_ua: navigator.userAgent });
+      if (error) throw error;
+      pushOn = true;
+      renderNotify();
+      toast('Done. This device will be notified every time Talabat finishes.');
+      swReg.showNotification('FreshQA Stock', { body: 'Talabat notifications are on for this device.', icon: 'icon-192.png', tag: 'freshqa-test' });
+    } catch (e) {
+      toast('Could not turn on notifications: ' + (e.message || e), true);
+    }
+  }
+
+  async function disablePush() {
+    try {
+      const sub = swReg && await swReg.pushManager.getSubscription();
+      if (sub) { await sb.rpc('delete_push_subscription', { p_endpoint: sub.endpoint }); await sub.unsubscribe(); }
+    } catch (e) {}
+    pushOn = false;
+    renderNotify();
+    toast('Talabat notifications turned off on this device.');
+  }
+
+  function renderNotify() {
+    const btn = $('notifyBtn');
+    btn.hidden = state.src !== 'talabat' || !sb;
+    const denied = pushSupported && Notification.permission === 'denied';
+    btn.classList.toggle('on', pushOn);
+    btn.classList.toggle('off-state', denied);
+    $('notifyText').textContent = pushOn ? 'Notifications on' : denied ? 'Notifications blocked' : 'Notify me when done';
+    btn.title = pushOn ? 'Tap to turn off notifications on this device' : 'Get a notification on this device when Talabat finishes';
+  }
+
+  function primeAudio() {  // must start from a tap, browsers block sound otherwise
+    try { audioCtx = audioCtx || new (window.AudioContext || window.webkitAudioContext)(); audioCtx.resume(); } catch (e) {}
+  }
+  function chime() {
+    if (!audioCtx) return;
+    try {
+      const t = audioCtx.currentTime;
+      [[880, 0], [1320, .16]].forEach(([f, d]) => {
+        const o = audioCtx.createOscillator(), g = audioCtx.createGain();
+        o.type = 'sine'; o.frequency.value = f;
+        g.gain.setValueAtTime(0, t + d); g.gain.linearRampToValueAtTime(.18, t + d + .02); g.gain.exponentialRampToValueAtTime(.001, t + d + .5);
+        o.connect(g).connect(audioCtx.destination); o.start(t + d); o.stop(t + d + .55);
+      });
+    } catch (e) {}
+  }
+
+  // Called when a Talabat refresh ends while this page is open (in any tab).
+  function talabatFinished(j, ok) {
+    const title = ok ? 'Talabat stock is ready' : 'Talabat refresh failed';
+    const body = ok ? ((j.message || 'Stock updated') + '. Tap to open.') : (j.error || 'Tap to see what happened.');
+    chime();
+    if (document.hidden) {
+      document.title = (ok ? '\u2713 ' : '\u26A0 ') + title;
+      // If this device is not subscribed to push, show a notification from the page itself.
+      if (!pushOn && swReg && pushSupported && Notification.permission === 'granted') {
+        swReg.showNotification(title, { body, icon: 'icon-192.png', badge: 'icon-192.png', tag: 'talabat-' + j.id, renotify: true });
+      }
+    }
+  }
+  document.addEventListener('visibilitychange', () => { if (!document.hidden) document.title = baseTitle; });
 
   const store = { get(k) { try { return localStorage.getItem(k); } catch (e) { return null; } },
                   set(k, v) { try { localStorage.setItem(k, v); } catch (e) {} } };
@@ -515,17 +635,21 @@
       if (j.source === state.src) { renderPanel(); if (wasWatching) celebrate(); }
       renderTabs();
       toast(SOURCES[j.source].name + ' stock updated' + (j.message ? ': ' + j.message : ''));
+      if (j.source === 'talabat' && wasWatching) talabatFinished(j, true);
     } else if (j.status === 'error') {
+      const wasActive = !!d.active;
       d.active = null;
       d.lastError = j;
       if (j.source === state.src) renderPanel();
       renderTabs();
       toast(SOURCES[j.source].name + ' refresh failed. ' + (j.error || ''), true);
+      if (j.source === 'talabat' && wasActive) talabatFinished(j, false);
     }
   }
 
   async function refresh() {
     if (!sb) return;
+    primeAudio();
     const src = state.src;
     $('refreshBtn').disabled = true;
     const { data, error } = await sb.rpc('request_refresh', { p_source: src });
@@ -749,7 +873,7 @@
       : '<li><div class="what">Earlier refreshes will appear here.</div></li>';
   }
 
-  function renderPanel() { renderOverview(); renderRun(); renderBranches(); renderNotes(); renderTable(); renderHistory(); }
+  function renderPanel() { renderOverview(); renderRun(); renderBranches(); renderNotes(); renderTable(); renderHistory(); renderNotify(); }
 
   // ---------------- celebration: juice droplets ----------------
   function celebrate() {
@@ -817,6 +941,8 @@
 
   renderTabs(); renderPanel(); renderPc();
   boot().then(subscribe);
+  initPush();
+  $('notifyBtn').addEventListener('click', () => { primeAudio(); pushOn ? disablePush() : enablePush(); });
 
   // safety nets if live updates drop (e.g. phone was asleep)
   setInterval(renderPc, 5000);
