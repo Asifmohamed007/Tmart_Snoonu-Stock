@@ -182,7 +182,9 @@
   .bell.blocked { opacity: .6; }
   .bell.blocked .slash { opacity: 1; }
   @media (max-width: 520px) {
-    .switch button { padding: 11px 4px; font-size: 14px; white-space: nowrap; } .actions .ghost { width: calc(100% - 66px); } .actions .bell { width: 54px; height: 54px; } }
+    .switch { grid-auto-columns: auto; overflow-x: auto; scrollbar-width: none; }
+    .switch::-webkit-scrollbar { display: none; }
+    .switch button { padding: 11px 12px; font-size: 14px; white-space: nowrap; } .actions .ghost { width: calc(100% - 66px); } .actions .bell { width: 54px; height: 54px; } }
   @keyframes ring { 10%, 30% { transform: rotate(14deg); } 20%, 40% { transform: rotate(-14deg); } 50% { transform: none; } }
 
   .run { margin-top: 20px; }
@@ -333,7 +335,7 @@
 
   <section class="hero">
     <h1 class="rise" style="--d:1">Where is FreshQA on the shelf right now?</h1>
-    <p class="rise" style="--d:2">Live stock for Snoonu, Talabat and Fruity Friends. Tap Refresh now to check again, then download the Excel in your usual template.</p>
+    <p class="rise" style="--d:2">Live stock for Snoonu, Talabat, Fruity Friends and Ninja. Tap Refresh now to check again, then download the Excel in your usual template.</p>
   </section>
 
   <div id="setup"></div>
@@ -343,6 +345,7 @@
     <button role="tab" data-src="snoonu" aria-selected="true">Snoonu</button>
     <button role="tab" data-src="talabat" aria-selected="false">Talabat</button>
     <button role="tab" data-src="fruity" aria-selected="false">Fruity Friends</button>
+    <button role="tab" data-src="ninja" aria-selected="false">Ninja</button>
   </nav>
 
   <main id="panel">
@@ -456,7 +459,8 @@
                branches: ['Wukair','Al Rayyan','Bin Omran','Gharafa','Muntaza','Um Salal Mohamed','Um Salal Ali','Lusail','Al khor','Abu Hamour','Thumama'] },
     fruity:  { name: 'Fruity Friends', eta: 'several minutes',
                branches: ['Wukair (T)','Al Rayyan (T)','Bin Omran (T)','Gharafa (T)','Muntaza (T)','Um Salal Mohamed (T)','Um Salal Ali (T)','Lusail (T)','Al Khor (T)','Abu Hamour (T)','Thumama (T)','The Center (T)',
-                          'Al Saad (S)','Um Salal Ali (S)','Lusail (S)','Industry Area (S)','Wakra (S)','Bani Hajer (S)','Al Khor (S)','Shahaniya (S)','Pearl (S)'] }
+                          'Al Saad (S)','Um Salal Ali (S)','Lusail (S)','Industry Area (S)','Wakra (S)','Bani Hajer (S)','Al Khor (S)','Shahaniya (S)','Pearl (S)'] },
+    ninja:   { name: 'Ninja', eta: 'a few seconds', branches: ['Al Nasr','Al Gharafa'] }
   };
   const ONLINE_MS = 45000;
   const $ = id => document.getElementById(id);
@@ -577,7 +581,7 @@
     src: SOURCES[store.get('fq-src')] ? store.get('fq-src') : 'snoonu',
     lastSeen: 0,
     filter: 'all', query: '',
-    d: { snoonu: blank(), talabat: blank(), fruity: blank() },
+    d: Object.fromEntries(Object.keys(SOURCES).map(k => [k, blank()])),
     ffSession: (() => { const h = new Date().getHours(); return h < 14 ? 'morning' : h >= 20 ? 'evening' : null; })(),
     tileStates: {}
   };
@@ -971,7 +975,7 @@
   // ---------------- start ----------------
   async function boot(quiet) {
     if (sb) {
-      try { await Promise.all([loadSource('snoonu'), loadSource('talabat'), loadSource('fruity'), loadAgent()]); }
+      try { await Promise.all([...Object.keys(SOURCES).map(loadSource), loadAgent()]); }
       catch (e) { if (!quiet) toast('Could not reach the database: ' + e.message, true); }
     }
     renderPc(); renderTabs(); renderPanel();
@@ -984,7 +988,7 @@
 
   // safety nets if live updates drop (e.g. phone was asleep)
   setInterval(renderPc, 5000);
-  setInterval(() => { if (state.d.snoonu.active || state.d.talabat.active || state.d.fruity.active) boot(true); else loadAgent().then(renderPc); }, 15000);
+  setInterval(() => { if (Object.values(state.d).some(x => x.active)) boot(true); else loadAgent().then(renderPc); }, 15000);
   setInterval(() => renderOverview(), 30000);
 })();
 </script>
