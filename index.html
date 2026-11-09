@@ -15,16 +15,7 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
-<script>
-  // ============ ONLY TWO THINGS TO FILL IN (Supabase -> Project Settings -> API Keys) ============
-  // These are PUBLIC by design (the "anon" / "publishable" key). Never put the service/secret key here.
-  window.FRESHQA_CONFIG = {
-    SUPABASE_URL: "https://zraicjnfeycewtgufamd.supabase.co/rest/v1/",
-    SUPABASE_ANON_KEY: "sb_publishable_RCGWDOP1XaSP5vghVTeC8w__xIJcHIl",
-    // Notifications: paste the PUBLIC key printed by make_push_keys.py on the office PC
-    VAPID_PUBLIC_KEY: "BJPuVIVZWEWMCS_rfdRe7UbLklWRx3XMQDTYn7QthL28HiA6WX0GKLHIP8lpck-8kuWVJLjK2lxyqtjKx0U9itw"
-  };
-</script>
+<script src="config.js"></script>
 <style>
   :root {
     --forest: #0A251B;
@@ -170,6 +161,13 @@
   .ghost[aria-disabled="true"] { opacity: .4; pointer-events: none; }
   .ghost svg { width: 18px; height: 18px; }
   button.ghost { cursor: pointer; font: inherit; font-weight: 600; }
+  .session { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 14px; }
+  .session[hidden] { display: none; }
+  .session span { font-size: 14px; color: var(--mist); margin-right: 2px; }
+  .session button { border: 1px solid var(--edge); background: var(--glass); color: var(--mist); padding: 8px 16px; border-radius: 999px;
+    font-weight: 600; font-size: 14px; cursor: pointer; transition: background .25s, color .25s, border-color .25s; }
+  .session button[aria-checked="true"] { background: var(--cream); color: #0A251B; border-color: var(--cream); }
+  .session em { font-style: normal; font-size: 13px; color: var(--mango); }
   .bell { position: relative; flex: none; width: 54px; height: 54px; border-radius: 50%; display: inline-grid; place-items: center;
     border: 1px solid var(--edge); background: var(--glass-2); color: var(--mist); cursor: pointer;
     transition: background .3s, border-color .3s, color .3s, transform .25s var(--spring); }
@@ -183,7 +181,8 @@
     background: var(--mint); box-shadow: 0 0 0 2px #10382A; }
   .bell.blocked { opacity: .6; }
   .bell.blocked .slash { opacity: 1; }
-  @media (max-width: 520px) { .actions .ghost { width: calc(100% - 66px); } .actions .bell { width: 54px; height: 54px; } }
+  @media (max-width: 520px) {
+    .switch button { padding: 11px 4px; font-size: 14px; white-space: nowrap; } .actions .ghost { width: calc(100% - 66px); } .actions .bell { width: 54px; height: 54px; } }
   @keyframes ring { 10%, 30% { transform: rotate(14deg); } 20%, 40% { transform: rotate(-14deg); } 50% { transform: none; } }
 
   .run { margin-top: 20px; }
@@ -334,7 +333,7 @@
 
   <section class="hero">
     <h1 class="rise" style="--d:1">Where is FreshQA on the shelf right now?</h1>
-    <p class="rise" style="--d:2">Live stock for every Snoonu and Talabat branch. Tap Refresh now to check again, then download the Excel in your usual template.</p>
+    <p class="rise" style="--d:2">Live stock for Snoonu, Talabat and Fruity Friends. Tap Refresh now to check again, then download the Excel in your usual template.</p>
   </section>
 
   <div id="setup"></div>
@@ -343,6 +342,7 @@
     <span class="ind" id="ind"></span>
     <button role="tab" data-src="snoonu" aria-selected="true">Snoonu</button>
     <button role="tab" data-src="talabat" aria-selected="false">Talabat</button>
+    <button role="tab" data-src="fruity" aria-selected="false">Fruity Friends</button>
   </nav>
 
   <main id="panel">
@@ -400,6 +400,12 @@
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/><path class="slash" d="M3 3l18 18"/></svg>
           </button>
         </div>
+        <div class="session" id="session" role="radiogroup" aria-label="Which columns to fill" hidden>
+          <span>Fill</span>
+          <button type="button" role="radio" data-s="morning">Morning</button>
+          <button type="button" role="radio" data-s="evening">Evening</button>
+          <em id="sessionHint"></em>
+        </div>
         <div class="run" id="run" hidden>
           <div class="bar"><i id="barFill"></i></div>
           <div class="run-line"><span id="runMsg">Waiting for the office PC…</span><b id="runPct">0%</b></div>
@@ -447,7 +453,10 @@
     snoonu:  { name: 'Snoonu', eta: 'about 30 seconds',
                branches: ['Al Saad','Umm Salal Ali','Lusail','Industry Area','Wakra','Bani Hajer','Al Khor','Shahaniya'] },
     talabat: { name: 'Talabat', eta: 'a few minutes',
-               branches: ['Wukair','Al Rayyan','Bin Omran','Gharafa','Muntaza','Um Salal Mohamed','Um Salal Ali','Lusail','Al khor','Abu Hamour','Thumama'] }
+               branches: ['Wukair','Al Rayyan','Bin Omran','Gharafa','Muntaza','Um Salal Mohamed','Um Salal Ali','Lusail','Al khor','Abu Hamour','Thumama'] },
+    fruity:  { name: 'Fruity Friends', eta: 'several minutes',
+               branches: ['Wukair (T)','Al Rayyan (T)','Bin Omran (T)','Gharafa (T)','Muntaza (T)','Um Salal Mohamed (T)','Um Salal Ali (T)','Lusail (T)','Al Khor (T)','Abu Hamour (T)','Thumama (T)','The Center (T)',
+                          'Al Saad (S)','Um Salal Ali (S)','Lusail (S)','Industry Area (S)','Wakra (S)','Bani Hajer (S)','Al Khor (S)','Shahaniya (S)','Pearl (S)'] }
   };
   const ONLINE_MS = 45000;
   const $ = id => document.getElementById(id);
@@ -568,7 +577,8 @@
     src: SOURCES[store.get('fq-src')] ? store.get('fq-src') : 'snoonu',
     lastSeen: 0,
     filter: 'all', query: '',
-    d: { snoonu: blank(), talabat: blank() },
+    d: { snoonu: blank(), talabat: blank(), fruity: blank() },
+    ffSession: (() => { const h = new Date().getHours(); return h < 14 ? 'morning' : h >= 20 ? 'evening' : null; })(),
     tileStates: {}
   };
   function blank() { return { latest: null, active: null, lastError: null, history: [], loaded: false }; }
@@ -659,12 +669,24 @@
     }
   }
 
+  function renderSession() {
+    const box = $('session');
+    box.hidden = state.src !== 'fruity';
+    box.querySelectorAll('button').forEach(b => b.setAttribute('aria-checked', b.dataset.s === state.ffSession));
+    $('sessionHint').textContent = state.ffSession ? '' : 'Pick Morning or Evening first';
+  }
+  $('session').addEventListener('click', e => {
+    const b = e.target.closest('button'); if (!b) return;
+    state.ffSession = b.dataset.s; renderSession();
+  });
+
   async function refresh() {
     if (!sb) return;
     primeAudio();
     const src = state.src;
+    if (src === 'fruity' && !state.ffSession) { toast('Pick Morning or Evening first.', true); renderSession(); return; }
     $('refreshBtn').disabled = true;
-    const { data, error } = await sb.rpc('request_refresh', { p_source: src });
+    const { data, error } = await sb.rpc('request_refresh', { p_source: src, p_options: src === 'fruity' ? { session: state.ffSession } : {} });
     if (error) { $('refreshBtn').disabled = false; toast('Could not start the refresh: ' + error.message, true); return; }
     state.d[src].active = data;
     state.d[src].lastError = null;
@@ -722,7 +744,11 @@
     const upd = $('updated');
     if (!sb) upd.textContent = '';
     else if (!d.loaded) upd.textContent = 'Loading…';
-    else if (d.latest) { upd.textContent = 'Updated ' + ago(d.latest.finished_at); upd.title = fmtTime(d.latest.finished_at); }
+    else if (d.latest) {
+      const ses = d.latest.result && d.latest.result.session;
+      upd.textContent = 'Updated ' + ago(d.latest.finished_at) + (ses ? ' (' + ses[0].toUpperCase() + ses.slice(1) + ')' : '');
+      upd.title = fmtTime(d.latest.finished_at);
+    }
     else upd.textContent = 'No data yet';
 
     setGauge(s ? s.pct : 0);
@@ -885,7 +911,7 @@
       : '<li><div class="what">Earlier refreshes will appear here.</div></li>';
   }
 
-  function renderPanel() { renderOverview(); renderRun(); renderBranches(); renderNotes(); renderTable(); renderHistory(); renderNotify(); }
+  function renderPanel() { renderOverview(); renderRun(); renderBranches(); renderNotes(); renderTable(); renderHistory(); renderNotify(); renderSession(); }
 
   // ---------------- celebration: juice droplets ----------------
   function celebrate() {
@@ -945,7 +971,7 @@
   // ---------------- start ----------------
   async function boot(quiet) {
     if (sb) {
-      try { await Promise.all([loadSource('snoonu'), loadSource('talabat'), loadAgent()]); }
+      try { await Promise.all([loadSource('snoonu'), loadSource('talabat'), loadSource('fruity'), loadAgent()]); }
       catch (e) { if (!quiet) toast('Could not reach the database: ' + e.message, true); }
     }
     renderPc(); renderTabs(); renderPanel();
@@ -958,7 +984,7 @@
 
   // safety nets if live updates drop (e.g. phone was asleep)
   setInterval(renderPc, 5000);
-  setInterval(() => { if (state.d.snoonu.active || state.d.talabat.active) boot(true); else loadAgent().then(renderPc); }, 15000);
+  setInterval(() => { if (state.d.snoonu.active || state.d.talabat.active || state.d.fruity.active) boot(true); else loadAgent().then(renderPc); }, 15000);
   setInterval(() => renderOverview(), 30000);
 })();
 </script>
